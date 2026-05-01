@@ -9,11 +9,7 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import { sql } from 'drizzle-orm';
 
 // --- DATABASE SETUP ---
-// We use the pooled connection for the actual application runtime
-const connectionString = process.env.DATABASE_URL!;
-const client = postgres(connectionString);
-const db = drizzle(client);
-
+import { db } from './src/db/index.js'
 
 // 1. Initialize the Express application
 const app = express();
