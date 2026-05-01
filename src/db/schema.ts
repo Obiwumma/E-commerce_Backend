@@ -12,3 +12,11 @@ export const products = pgTable('products', {
   imageUrl: text('image_url').notNull(),
   stockQuantity: integer('stock_quantity').notNull().default(0),
 });
+
+export const orders = pgTable('orders', {
+  id: serial('id').primaryKey(),
+  customerName: text('customer_name').notNull(),
+  customerEmail: text('customer_email').notNull(),
+  totalAmount: numeric('total_amount').notNull(),
+  status: text('status').notNull().default('PENDING'),
+});
