@@ -9,7 +9,8 @@ import { drizzle } from 'drizzle-orm/postgres-js'
 import { sql } from 'drizzle-orm';
 
 // --- DATABASE SETUP ---
-import { db } from './src/db/index.js'
+import { db } from './src/db/index.js'  
+import { products } from './src/db/schema.js'  
 
 // 1. Initialize the Express application
 const app = express();
@@ -29,6 +30,24 @@ app.use(express.json());
 app.get('/', (req: Request, res: Response) => {
   res.json({ message: "E-commerce API is live and breathing!" });
 });
+
+// get all products
+app.get('/api/products', async (req: Request, res: Response) => {
+  try {
+    // 1. Use Drizzle to fetch all products from the database
+    const allProducts = await db.select().from(products)
+    
+    // 2. Send 'allProducts' back to the client with a successful JSON response
+    res.json({ 
+      message: "All products successfully!", 
+      productsList: allProducts 
+    });
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    // 3. Send back a 500 status code and an error message JSON
+    res.status(500).json({ error: "Failed to retrieve products." });
+  }
+})
 // A simple health-check route to verify our server is working
 app.get('/test-db', async (req: Request, res: Response) => {
   try {
