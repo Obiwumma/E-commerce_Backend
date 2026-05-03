@@ -1,3 +1,4 @@
+import cors from 'cors';
 import "dotenv/config";
 import express, { type Request, type Response } from 'express';
 
@@ -22,6 +23,9 @@ const port =  process.env.PORT || 3000;
 // --- MIDDLEWARE ---
 // This built-in middleware tells Express to automatically parse incoming JSON payloads. 
 // Without this, when our Next.js frontend eventually sends the cart data for checkout, Express won't be able to read it.
+app.use(express.json());
+
+app.use(cors());
 app.use(express.json());
 
 // --- ROUTES ---
