@@ -2,6 +2,8 @@ import cors from 'cors';
 import "dotenv/config";
 import express, { type Request, type Response } from 'express';
 
+
+
 // 1. Import the Postgres driver
 import postgres from 'postgres';
 
@@ -13,9 +15,16 @@ import { sql, eq } from 'drizzle-orm';
 import { db } from './src/db/index.js'  
 import { products } from './src/db/schema.js'  
 
+// Import stripe
+import Stripe from 'stripe';
+
 // 1. Initialize the Express application
 const app = express();
 
+// Initialize Stripe with your secret key
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: '2026-04-22.dahlia', // Updated to match your installed version!
+});
 
 // 3. Define the port we want our server to listen on
 const port =  process.env.PORT || 3000;
@@ -79,6 +88,49 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to retrieve product." });
   }
 });
+
+app.post('/api/checkout', async (req: Request, res: Response) => {
+  try {
+    // 1. Grab the cart items sent from the Next.js frontend
+    const { items } = req.body;
+
+    // 2. Format the items into the exact shape Stripe requires
+    const lineItems = items.map((item: any) => {
+      return {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: item.title,
+            images: [item.imageUrl], // Stripe will actually show your product image on the checkout page!
+          },
+          // Stripe requires prices to be in CENTS, not dollars. 
+          // So $14.99 becomes 1499. We multiply by 100 to convert it.
+          unit_amount: Math.round(Number(item.price) * 100),
+        },
+        quantity: item.quantity,
+      };
+    });
+
+    // 3. Tell Stripe to create a secure checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'payment',
+      // Where should Stripe send the user when they successfully pay?
+      success_url: 'http://localhost:3001/success',
+      // Where should Stripe send them if they hit the back button?
+      cancel_url: 'http://localhost:3001/cart',
+    });
+
+    // 4. Send the unique Stripe URL back to the frontend
+    res.json({ url: session.url });
+
+  } catch (error: any) {
+    console.error("Stripe Checkout Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // A simple health-check route to verify our server is working
 // app.get('/test-db', async (req: Request, res: Response) => {
 //   try {
