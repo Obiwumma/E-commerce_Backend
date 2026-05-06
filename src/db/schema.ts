@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, integer } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, numeric, integer, timestamp } from 'drizzle-orm/pg-core';
 
 export const products = pgTable('products', {
   // 'serial' automatically increments the ID, just like autoincrement()
@@ -17,8 +17,9 @@ export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   customerName: text('customer_name').notNull(),
   customerEmail: text('customer_email').notNull(),
-  totalAmount: numeric('total_amount').notNull(),
+  totalAmount: numeric('total_amount').notNull(), 
   status: text('status').notNull().default('PENDING'),
+  stripeSessionId: text('stripe_session_id').unique(),
 });
 
 export const orderItems = pgTable('order_items', {
