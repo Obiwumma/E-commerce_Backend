@@ -5,11 +5,10 @@ import express, { type Request, type Response } from 'express';
 
 
 // 1. Import the Postgres driver
-import postgres from 'postgres';
+import { orders } from './src/db/schema.js';
 
 // 2. Import the Drizzle function specifically for Postgres.js
-import { drizzle } from 'drizzle-orm/postgres-js'
-import { sql, eq } from 'drizzle-orm';
+import {  eq } from 'drizzle-orm';
 
 // --- DATABASE SETUP ---
 import { db } from './src/db/index.js'  
@@ -54,12 +53,22 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req: 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     
-    console.log(" SUCCESS! WE GOT THE MONEY!");
-    console.log("Order total:", session.amount_total);
-    console.log("Customer email:", session.customer_details?.email);
-    
-    // YOUR FUTURE TURN: This is where you will write the Drizzle code 
-    // to save the final order into your PostgreSQL database!
+    try {
+      // Convert Stripe's cents back into dollars for your numeric field
+      const dollars = (session.amount_total! / 100).toString();
+
+      await db.insert(orders).values({
+        customerName: session.customer_details?.name || 'Guest User',
+        customerEmail: session.customer_details?.email || 'guest@example.com',
+        totalAmount: dollars,
+        status: 'PAID',
+        stripeSessionId: session.id,
+      });
+      
+      console.log(` Order saved securely for ${session.customer_details?.name}`);
+    } catch (dbError) {
+      console.error(" CRITICAL: Payment succeeded, but database failed!", dbError);
+    }
   }
 
   // 4. Send a 200 OK back to Stripe so they know we received it
