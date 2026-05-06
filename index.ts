@@ -29,6 +29,43 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
 // 3. Define the port we want our server to listen on
 const port =  process.env.PORT || 3000;
 
+// =====================================================================
+// 🚨 STRIPE WEBHOOK (MUST BE ABOVE express.json!)
+// Notice we use express.raw() here instead of json()
+// =====================================================================
+app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+  // 1. Grab the signature Stripe left in the headers
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    // 2. Use your new Secret Key to verify the message is actually from Stripe
+    event = stripe.webhooks.constructEvent(
+      req.body, 
+      sig as string, 
+      process.env.STRIPE_WEBHOOK_SECRET as string
+    );
+  } catch (err: any) {
+    console.error(`⚠️ Webhook signature verification failed:`, err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // 3. If the signature is good, check what happened!
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    
+    console.log(" SUCCESS! WE GOT THE MONEY!");
+    console.log("Order total:", session.amount_total);
+    console.log("Customer email:", session.customer_details?.email);
+    
+    // YOUR FUTURE TURN: This is where you will write the Drizzle code 
+    // to save the final order into your PostgreSQL database!
+  }
+
+  // 4. Send a 200 OK back to Stripe so they know we received it
+  res.status(200).send();
+});
+
 // --- MIDDLEWARE ---
 // This built-in middleware tells Express to automatically parse incoming JSON payloads. 
 // Without this, when our Next.js frontend eventually sends the cart data for checkout, Express won't be able to read it.
