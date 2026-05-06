@@ -45,7 +45,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req: 
       process.env.STRIPE_WEBHOOK_SECRET as string
     );
   } catch (err: any) {
-    console.error(`⚠️ Webhook signature verification failed:`, err.message);
+    console.error(` Webhook signature verification failed:`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
