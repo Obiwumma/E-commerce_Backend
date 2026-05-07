@@ -5,7 +5,7 @@ import express, { type Request, type Response } from 'express';
 
 
 // 1. Import the Postgres driver
-import { orders } from './src/db/schema.js';
+import { orders, users } from './src/db/schema.js';
 
 // 2. Import the Drizzle function specifically for Postgres.js
 import {  eq } from 'drizzle-orm';
@@ -13,6 +13,10 @@ import {  eq } from 'drizzle-orm';
 // --- DATABASE SETUP ---
 import { db } from './src/db/index.js'  
 import { products } from './src/db/schema.js'  
+
+// -----auth setup-----
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
 // Import stripe
 import Stripe from 'stripe';
@@ -28,10 +32,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
 // 3. Define the port we want our server to listen on
 const port =  process.env.PORT || 3000;
 
-// =====================================================================
-// 🚨 STRIPE WEBHOOK (MUST BE ABOVE express.json!)
-// Notice we use express.raw() here instead of json()
-// =====================================================================
+// use express.raw() here instead of json()
 app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
   // 1. Grab the signature Stripe left in the headers
   const sig = req.headers['stripe-signature'];
@@ -132,6 +133,92 @@ app.get('/api/products/:id', async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching single product:", error);
     res.status(500).json({ error: "Failed to retrieve product." });
+  }
+});
+
+// Auth setup
+// Registration
+app.post('/api/auth/register', async (req: Request, res: Response) => {
+  try {
+    const { name, email, password } = req.body;
+
+    // 1. Check if the user already exists
+    // We query the database to see if anyone has this email
+    const existingUser = await db.select().from(users).where(eq(users.email, email));
+    
+    if (existingUser.length > 0) {
+      return res.status(400).json({ error: "User already exists with this email." });
+    }
+
+    // 2. The Cryptography (Hashing)
+    // We take their password and scramble it 10 times (called "salt rounds")
+    // Example: "password123" becomes something like "$2b$10$wYx1..."
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // 3. Save to the Database
+    // We save the scrambled password, NEVER the real one.
+    const [newUser] = await db.insert(users).values({
+      name,
+      email,
+      passwordHash: hashedPassword,
+    }).returning(); 
+
+    if (!newUser) {
+      throw new Error("Failed to create user");
+    }
+
+    res.status(201).json({ 
+      user: { id: newUser.id, name: newUser.name, email: newUser.email }
+    });
+
+  } catch (error: any) {
+    console.error("Registration Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Login process
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+
+    // 1. Find the user in the database
+    const userArray = await db.select().from(users).where(eq(users.email, email));
+    const user = userArray[0];
+
+    if (!user) {
+      return res.status(401).json({ error: "Invalid email or password" }); // Vague error on purpose so hackers don't know which one they got wrong!
+    }
+
+    // 2. Compare the passwords
+    // We hand bcrypt the plain password ("supersecretpassword123") and the hash from the DB. 
+    // It runs the math to see if they match.
+    const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+
+    if (!passwordMatch) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+
+    // 3. Generate the Digital Wristband (JWT)
+    // We bake the user's ID into the token so we know who they are later
+    const tokenSecret = process.env.JWT_SECRET || 'fallback_super_secret_key_for_dev';
+    const token = jwt.sign(
+      { userId: user.id }, 
+      tokenSecret, 
+      { expiresIn: '7d' } // The wristband expires in 7 days
+    );
+
+    // 4. Give the token to the user
+    res.status(200).json({
+      message: "Login successful",
+      token: token,
+      user: { id: user.id, name: user.name, email: user.email }
+    });
+
+  } catch (error) {
+    console.error("Login Error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
