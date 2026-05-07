@@ -1,6 +1,6 @@
 import cors from 'cors';
 import "dotenv/config";
-import express, { type Request, type Response } from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 
 
 
@@ -218,6 +218,67 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
   } catch (error) {
     console.error("Login Error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ======= AUTHENTICATION MIDDLEWARE ==========
+const verifyToken = (req: Request, res: Response, next: NextFunction) => {
+  // 1. Check if they even brought a wristband
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Access Denied: No token provided" });
+  }
+
+  // 2. Extract the actual token from the "Bearer aaaa.bbbb.cccc" string
+  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: "Access Denied: Malformed token" });
+  }
+
+  try {
+    // 3. Verify the math using your secret key
+    const tokenSecret = process.env.JWT_SECRET || 'fallback_super_secret_key_for_dev';
+    const decoded = jwt.verify(token, tokenSecret) as unknown as { userId: number };
+
+    // 4. Attach the user's ID to the response locals so the next function can use it!
+    res.locals.userId = decoded.userId;
+
+    // 5. Open the door! (Move to the actual route)
+    next();
+  } catch (error) {
+    // If the token is expired or altered, jwt.verify throws an error
+    return res.status(403).json({ error: "Access Denied: Invalid or expired token" });
+  }
+};
+
+// PROTECTED ROUTES
+// ==========================================
+
+app.get('/api/orders/me', verifyToken, async (req: Request, res: Response) => {
+  try {
+    // 1. Grab the ID that the bouncer attached
+    const userId = res.locals.userId;
+
+    // 2. Look up the user in the database to get their email
+    const userArray = await db.select().from(users).where(eq(users.id, userId));
+    const user = userArray[0];
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // 3. Find all orders that belong to this user's email
+    const userOrders = await db.select().from(orders).where(eq(orders.customerEmail, user.email));
+
+    // 4. Send the orders back to the frontend
+    res.status(200).json({
+      message: "Orders retrieved successfully",
+      orders: userOrders
+    });
+
+  } catch (error) {
+    console.error("Fetch Orders Error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
