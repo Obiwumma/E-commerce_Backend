@@ -128,8 +128,8 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
 
+    // Check if user exists
     const existingUser = await db.select().from(users).where(eq(users.email, email));
-    
     if (existingUser.length > 0) {
       return res.status(400).json({ error: "User already exists with this email." });
     }
@@ -137,8 +137,11 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+    // FIX: If 'name' is not provided by the frontend, extract the part of the email before the '@' to use as the name.
+    const finalName = name || email.split('@')[0];
+
     const [newUser] = await db.insert(users).values({
-      name,
+      name: finalName, // Use the fallback name here
       email,
       passwordHash: hashedPassword,
     }).returning(); 
